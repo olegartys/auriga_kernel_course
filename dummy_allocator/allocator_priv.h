@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define DEBUG 1
+
 /**
  * Структура, описывающая метаинформацию о блоке памяти
  */
@@ -15,5 +17,12 @@ struct _mem_chunk_t {
 typedef struct _mem_chunk_t mem_chunk_t;
 
 #define CHUNK_SIZE (sizeof (mem_chunk_t))
+
+/**
+ * Преобразование адреса из адреса chunk в адрес памяти, которым он 
+ * управляет, и наоборот
+ */
+#define CHUNK_MEM(chunk) (void*)((char*)chunk + CHUNK_SIZE)
+#define MEM_CHUNK(ptr) (mem_chunk_t*)((char*)ptr - CHUNK_SIZE)
 
 #endif // ALLOCATOR_PRIV_H

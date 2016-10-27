@@ -1,5 +1,5 @@
 /*
- * test.c
+ * 1.c
  * 
  * Copyright 2016 olegartys <olegartys@olegartys-HP-Pavilion-15-Notebook-PC>
  * 
@@ -22,19 +22,17 @@
  */
 
 
-#include <stdio.h>
+#include <linux/init.h>
+#include <linux/module.h>
 
-#include "allocator.h"
-
-int main(int argc, char **argv)
-{
-	void *mem = malloc(sizeof(char)*100);
-	free(mem);
-	void *mem1 = calloc(1000, sizeof(char));
-	memset(mem1, 0xFF, 1000);
-	void *mem2 = realloc(mem, 2000);
-	free(mem1);
-	free(mem2);
+static int hello_init(void) {
+	printk(KERN_ALERT "Hello, world\n");
 	return 0;
 }
 
+static void hello_exit(void) {
+	printk(KERN_ALERT "Goodbye world\n");
+}
+
+module_init(hello_init);
+module_exit(hello_exit);

@@ -11,4 +11,4 @@ allocator.o: allocator.c
 	gcc -c -fpic allocator.c
 	
 clean:
-	rm  allocator.o test.o liballocator.so
+	rm test allocator.o test.o liballocator.so
