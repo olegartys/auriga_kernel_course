@@ -82,6 +82,8 @@ void *malloc(size_t size) {
 	size = _align(size);
 	
 	if (base) {
+		printf("Chunk found\n");
+		fflush(stdout);
 		chunk = find_chunk(size);
 		if (!chunk) {
 			// Подходящий блок не найден
@@ -101,6 +103,7 @@ void *malloc(size_t size) {
 		}
 		base = chunk;
 		last = &base;
+		base->is_free = 0;
 	}
 #if DEBUG
 	printf("chunk=%p base=%p last=%p ret=%p chunk_size=%lu\n", chunk, base, *last, CHUNK_MEM(chunk), CHUNK_SIZE);
@@ -145,6 +148,7 @@ void free(void *ptr) {
 	while (chunk) {
 		if (chunk == MEM_CHUNK(ptr)) {
 			chunk->is_free = 1;
+			break;
 		}
 		chunk = chunk->next;
 	}
