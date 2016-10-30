@@ -39,7 +39,7 @@ static mem_chunk_t *find_chunk(size_t size) {
 static mem_chunk_t *get_chunk_by_address(void *ptr) {
 	mem_chunk_t *chunk = base;
 	
-	while (chunk && (chunk != ptr+CHUNK_SIZE)) {
+	while (chunk && (chunk != MEM_CHUNK(ptr))) {
 		chunk = chunk->next;
 	}
 	
@@ -166,6 +166,8 @@ void *realloc(void *ptr, size_t size) {
 	} else {
 		chunk = get_chunk_by_address(ptr);
 		if (!chunk) {
+			puts("Chunk is NULL");
+			fflush(stdout);
 			return NULL;
 		}
 		// если в этом блоке достаточно места
