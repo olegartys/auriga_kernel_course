@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 /**
  * Структура, описывающая метаинформацию о блоке памяти
