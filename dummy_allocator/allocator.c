@@ -6,7 +6,6 @@
 #include "allocator_priv.h"
 
 static mem_chunk_t *base = NULL;
-static mem_chunk_t **last = NULL;
 
 /**
  *  Выравнивание по границе 8 байт
@@ -51,21 +50,30 @@ static mem_chunk_t *get_chunk_by_address(void *ptr) {
  */
 static mem_chunk_t *request_space(size_t size) {
 	mem_chunk_t *chunk;
-	
+	mem_chunk_t *_base;	
+
 	chunk = sbrk(0); // получаем текущий адрес break 
 	if (sbrk(CHUNK_SIZE + size) == (void*)-1) {
 		return NULL;
 	}
-	
+
 	chunk->size = size;
 	chunk->next = NULL;
-	chunk->is_free = 1;
-	
-	if (last) {
-		(*last)->next = chunk;
-		last = &chunk;
+	chunk->is_free = 0;
+
+	// Добавляем элемент в список 
+	// FIXME: O(n)
+	if (base != NULL) {
+		_base = base;
+		while (_base->next != NULL) {
+			_base = _base->next;
+		}
+
+		_base->next = chunk;
+	} else {
+		base = chunk;
 	}
-	
+
 	return chunk;
 }
 
@@ -81,32 +89,19 @@ void *malloc(size_t size) {
 
 	size = _align(size);
 	
-	if (base) {
-		printf("Chunk found\n");
-		fflush(stdout);
-		chunk = find_chunk(size);
-		if (!chunk) {
-			// Подходящий блок не найден
-			chunk = request_space(size);
-			
-			if (!chunk) {
-				err_code = ENOMEM;
-				goto err;
-			}
-		}
-	} else {
-		// Первое выделение памяти
+	chunk = find_chunk(size);
+	if (!chunk) {
+		// Подходящий блок не найден
 		chunk = request_space(size);
+		
 		if (!chunk) {
 			err_code = ENOMEM;
 			goto err;
 		}
-		base = chunk;
-		last = &base;
-		base->is_free = 0;
 	}
+
 #if DEBUG
-	printf("chunk=%p base=%p last=%p ret=%p chunk_size=%lu\n", chunk, base, *last, CHUNK_MEM(chunk), CHUNK_SIZE);
+	printf("chunk=%p base=%p ret=%p chunk_size=%lu\n", chunk, base, CHUNK_MEM(chunk), CHUNK_SIZE);
 #endif
 	return CHUNK_MEM(chunk);
 
@@ -170,12 +165,10 @@ void *realloc(void *ptr, size_t size) {
 	} else {
 		chunk = get_chunk_by_address(ptr);
 		if (!chunk) {
-			puts("Chunk is NULL");
-			fflush(stdout);
 			return NULL;
 		}
 		// если в этом блоке достаточно места
-		if (chunk->size <= size) {
+		if (chunk->size >= size) {
 			return CHUNK_MEM(chunk);
 			
 		// если нет - выделяем новый кусок
