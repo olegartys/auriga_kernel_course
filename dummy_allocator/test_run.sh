@@ -2,5 +2,7 @@
 
 export LD_LIBRARY_PATH="."
 
-#LD_PRELOAD=./liballocator.so test
-test
+make clean
+make
+
+./test
