@@ -28,13 +28,38 @@
 
 int main(int argc, char **argv)
 {
-	void *mem = malloc(sizeof(char)*100);
+	/*void *mem = malloc(sizeof(char)*100);
 	free(mem);
 	void *mem1 = calloc(1000, sizeof(char));
 	memset(mem1, 0xFF, 1000);
 	void *mem2 = realloc(mem, 2000);
 	free(mem1);
-	free(mem2);
+	free(mem2);*/
+	int i;
+	int *p1 = malloc(10*sizeof(int));
+	for (i = 0; i < 10; i++) p1[i] = i;
+	for (i = 0; i < 10; i++) if (p1[i] != i) puts("err1");	
+	
+	int *p2 = malloc(10*sizeof(int));
+	for (i = 0; i < 10; ++i) p2[i] = -1;
+	for (i = 0; i < 10; i++) if (p1[i] != i) puts("err2");
+	for (i = 0; i < 10; i++) if (p2[i] != -1) puts("err3");	
+
+	p1 = realloc(p1, 20 * sizeof(int));
+	for (i = 0; i < 20; ++i) p1[i] = i;
+	for (i = 0; i < 20; ++i) if (p1[i] != i) puts("err4");
+	for (i = 0; i < 10; i++) {
+		printf("p2[%d] = %d\n", i, p2[i]);
+		 if (p2[i] != -1) puts("err5");	
+	}
+
+	p1 = realloc(p1, 5 * sizeof(int));
+	for (i = 0; i < 5; i++) if (p1[i] != i) puts("err6");
+	for (i = 0; i < 10; i++) if (p2[i] != -1) puts("err7");
+
+	free(p2);
+	free(p1);
+ 	
 	return 0;
 }
 
