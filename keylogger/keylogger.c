@@ -34,9 +34,16 @@ FILE *log_file;
  */
 static void log_by_timer(union sigval sig_val) {
 	int i;
+	time_t cur_time;
+	char *time_str;
+	
+	// Get time string
+	time(&cur_time);
+	time_str = ctime(&cur_time);
 	
 	// Assuming log_file is valid
 	fseek(log_file, 0, SEEK_SET);
+	fprintf(log_file, "Timestamp: %s\n", time_str); 
 	fprintf(log_file, "Code Name Count\n");
 	for (i = 0; i < KEY_MAX + 1; i++) {
 		if (keys[i] != NULL) {
