@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <pthread.h>
+
 #include "allocator_priv.h"
 
+pthread_mutex_t mem_mutex;
 static mem_chunk_t *base = NULL;
 
 /**
@@ -87,6 +90,8 @@ void *malloc(size_t size) {
 	fflush(stdout);
 #endif
 
+	pthread_mutex_lock(&mem_mutex);
+
 	size = _align(size);
 	
 	chunk = find_chunk(size);
@@ -103,10 +108,13 @@ void *malloc(size_t size) {
 #if DEBUG
 	printf("chunk=%p base=%p ret=%p chunk_size=%lu\n", chunk, base, CHUNK_MEM(chunk), CHUNK_SIZE);
 #endif
+	
+	pthread_mutex_unlock(&mem_mutex);
 	return CHUNK_MEM(chunk);
 
 err:
 	errno = err_code;
+	pthread_mutex_unlock(&mem_mutex);
 	return NULL;
 }
 
@@ -140,6 +148,7 @@ void free(void *ptr) {
 		return;
 	}
 	 
+	pthread_mutex_lock(&mem_mutex);
 	while (chunk) {
 		if (chunk == MEM_CHUNK(ptr)) {
 			chunk->is_free = 1;
@@ -147,6 +156,7 @@ void free(void *ptr) {
 		}
 		chunk = chunk->next;
 	}
+	pthread_mutex_unlock(&mem_mutex);
 }
 
 void *realloc(void *ptr, size_t size) {
@@ -158,26 +168,34 @@ void *realloc(void *ptr, size_t size) {
 	fflush(stdout);
 #endif
 	
+	pthread_mutex_lock(&mem_mutex);
 	size = _align(size);
 	
 	if (!ptr) {
+		pthread_mutex_unlock(&mem_mutex);
 		return malloc(size);
 	} else {
 		chunk = get_chunk_by_address(ptr);
 		if (!chunk) {
+			pthread_mutex_unlock(&mem_mutex);
 			return NULL;
 		}
 		// если в этом блоке достаточно места
 		if (chunk->size >= size) {
+			pthread_mutex_unlock(&mem_mutex);
 			return CHUNK_MEM(chunk);
 			
 		// если нет - выделяем новый кусок
 		} else {
+			pthread_mutex_unlock(&mem_mutex);
 			new_ptr = malloc(size);
+			pthread_mutex_lock(&mem_mutex);
 			if (!new_ptr) {
+				pthread_mutex_unlock(&mem_mutex);
 				return NULL;
 			} else {
 				memcpy(new_ptr, ptr, (MEM_CHUNK(ptr))->size); // TODO: проверить границы
+				pthread_mutex_unlock(&mem_mutex);
 				free(ptr);
 				return new_ptr;
 			}
