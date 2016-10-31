@@ -10,12 +10,13 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <linux/input.h>
 
 #include "keys_map.h"
 
-#define CONSOLE_OUTPUT 1
+#define CONSOLE_OUTPUT 0 // Controls printf output
 
 #define DEV_NAME_LEN 256 // Length of the event device name 
 
@@ -127,59 +128,86 @@ int main(int argc, char **argv) {
 	int n_read = 0;
 	
 	struct input_event kb_event;
-		
+	
+	pid_t pid;
+	
 	// Check args
 	if (argc != 2) {
 		fprintf(stderr, "Usage: %s /dev/input/eventX\n", argv[0]);
 		exit(EINVAL); 
 	}
-	
-	// Register log_file fflush function
-	if (atexit(exit_cleanup) < 0) {
-		perror("atexit");
-	}
-	
-	// Get event file fd
-	kb_fd = init_event_device(argv[1]);
-	if (kb_fd < 0) {
+
+	// Daemonize
+	pid = fork();
+	switch (pid) {
+	case -1:
+		perror("fork");
 		exit(errno);
-	}
 	
-	// Setup logger timer 
-	if (setup_timer(EXPIRE_TIME_SEC) < 0) {
-		close(kb_fd);
-		exit(errno);
-	}
-	
-	// Oppening log file
-	log_file = fopen(LOG_FILE, "w");
-	if (log_file == NULL) {
-		perror("Open log file");
-		close(kb_fd);
-		exit(errno);
-	}
+	// Parent exit
+	default:
+		exit(EXIT_SUCCESS);
+
+	// Do all the work in the child process
+	case 0:	{
 		
-	// Starting listen loop
-	while (1) {
-		n_read = read(kb_fd, &kb_event, sizeof(struct input_event));
-		if (n_read != sizeof(struct input_event)) {
-			perror("Read error");
-			continue;
+		printf("Daemon started! Pid: %d\n", getpid());
+		
+		// Detach him from the terminal // TODO: check umask and setsid necessity
+		pid = setsid(); 
+		if (pid < 0) {
+			perror("setsid");
+			exit(errno);
+		}
+	
+		// Register log_file fflush function
+		if (atexit(exit_cleanup) < 0) {
+			perror("atexit");
 		}
 		
-		// FIXME: 0 is for key press, 1 is for release and 2 is for long press.
-		// Maybe there is constant value?
-		if (kb_event.type == EV_KEY && kb_event.value == 0) {
+		// Get event file fd
+		kb_fd = init_event_device(argv[1]);
+		if (kb_fd < 0) {
+			exit(errno);
+		}
+		
+		// Setup logger timer 
+		if (setup_timer(EXPIRE_TIME_SEC) < 0) {
+			close(kb_fd);
+			exit(errno);
+		}
+		
+		// Open log file
+		log_file = fopen(LOG_FILE, "w");
+		if (log_file == NULL) {
+			perror("Open log file");
+			close(kb_fd);
+			exit(errno);
+		}
+			
+		// Starting listen loop
+		while (1) {
+			n_read = read(kb_fd, &kb_event, sizeof(struct input_event));
+			if (n_read != sizeof(struct input_event)) {
+				perror("Read error");
+				continue;
+			}
+			
+			// FIXME: 0 is for key press, 1 is for release and 2 is for long press.
+			// Maybe there is constant value?
+			if (kb_event.type == EV_KEY && kb_event.value == 0) {
 #if CONSOLE_OUTPUT
-			printf("EVENT: type=%d code=%d (%s) value=%d\n",
-				kb_event.type, kb_event.code, keys[kb_event.code], kb_event.value);
+				printf("EVENT: type=%d code=%d (%s) value=%d\n",
+					kb_event.type, kb_event.code, keys[kb_event.code], kb_event.value);
 #endif
-			keys_press_count[kb_event.code]++;
+				keys_press_count[kb_event.code]++;
+			}
 		}
+		
+		close(kb_fd);
+		fclose(log_file);
+		
+		return 0;
 	}
-	
-	close(kb_fd);
-	fclose(log_file);
-	
-	return 0;
+	}
 }
