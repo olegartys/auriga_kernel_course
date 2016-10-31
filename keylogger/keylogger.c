@@ -123,6 +123,8 @@ static int setup_timer(time_t period_sec) {
 		perror("Set time");
 		return -1;
 	}
+	
+	return 0;
 }
 
 static void exit_cleanup(void) {
