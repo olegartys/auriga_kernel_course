@@ -3,6 +3,8 @@
 
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
+#include <linux/hdreg.h>
+
 #include <linux/spinlock.h>
 
 MODULE_LICENSE("GPL");
@@ -11,11 +13,10 @@ MODULE_LICENSE("GPL");
 
 #define MODULE_MINORS_K 1 // TODO #1: extend to generic count
 
-#define NSECTORS 512
-#define SECTORSIZE 512
-#define KERNEL_SECTOR_SIZE 512
+#define NSECTORS 512 // TODO #3: add as parameter
 
-// #define SECTORSIZE_TO_KERNELSECTORSIZE (sector_size,  
+#define SECTORSIZE 0 // TODO #2: need to support custom sector size
+#define KERNEL_SECTOR_SIZE 512
 
 static int major_num = 0;
 
@@ -30,7 +31,21 @@ struct kramdisk_dev {
 static struct kramdisk_dev *dev;
 
 static int kramdisk_getgeo(struct block_device *blk_dev, struct hd_geometry *geo) {
+	size_t size;
+
+	/* We have no real geometry, of course, so make something up. */
+	// FIXME: not use global var
+	size = dev->size;
+	geo->cylinders = (size & ~0x3f) >> 6;
+	geo->heads = 4;
+	geo->sectors = 16;
+	geo->start = 0;
+	
 	return 0;
+}
+
+static void _kramdisk_request(...) {
+	
 }
 
 static void kramdisk_request(struct request_queue *queue) {
@@ -43,6 +58,8 @@ static struct block_device_operations kramdisk_fops = {
 };
 
 static int kramdisk_init(void) {
+	int ret = 0;
+	
 	major_num = register_blkdev(major_num, MODULE_NAME);
 	if (major_num <= 0) {
 		printk(KERN_ALERT "Can't allocate major number\n");
@@ -57,11 +74,12 @@ static int kramdisk_init(void) {
 	}
 	printk(KERN_ALERT "mem allocated\n");
 	
-	memset(&dev, 0, sizeof(struct kramdisk_dev));
-	dev->size = NSECTORS * SECTORSIZE;
+	memset(dev, 0, sizeof(struct kramdisk_dev));
+	dev->size = NSECTORS * KERNEL_SECTOR_SIZE;
 	dev->data = vmalloc(dev->size);
 	if (!dev->data) {
 		printk(KERN_ALERT "Can't allocate vmem for data\n");
+		ret = -ENOMEM;
 		goto out_vmem;
 	}
 	spin_lock_init(&dev->lock);
@@ -69,14 +87,18 @@ static int kramdisk_init(void) {
 	dev->queue = blk_init_queue(kramdisk_request, &dev->lock);
 	if (!dev->queue) {
 		printk(KERN_ALERT "Can't allcoate memory for queue\n");
+		ret = -ENOMEM;
 		goto out_devqueue;
 	}
+	blk_queue_physical_block_size(dev->queue, PAGE_SIZE);
+	blk_queue_logical_block_size(dev->queue, PAGE_SIZE);
 	// To support custom hardware sectorsize
 	// blk_queue_hardsect_size(dev->queue, SECTORSIZE);
 	
 	dev->gd = alloc_disk(MODULE_MINORS_K);
 	if (!dev->gd) {
 		printk(KERN_ALERT "Can't allocate disk\n");
+		ret = -ENOMEM;
 		goto out_devgd;
 	}
 	
@@ -86,11 +108,13 @@ static int kramdisk_init(void) {
 	dev->gd->queue = dev->queue;
 	dev->gd->private_data = dev;
 	snprintf(dev->gd->disk_name, 32, "%s%c", MODULE_NAME, 0); // TODO #1
-	set_capacity(dev->gd, NSECTORS * (SECTORSIZE / KERNEL_SECTOR_SIZE));
+	set_capacity(dev->gd, NSECTORS * KERNEL_SECTOR_SIZE /*(SECTORSIZE / KERNEL_SECTOR_SIZE)*/); // TODO #2
 	
 	// This should be last call in init function
 	add_disk(dev->gd);
 	printk(KERN_ALERT "kramdisk is initialized\n");
+	
+	return ret;
 		
 out_devgd:
 	blk_cleanup_queue(dev->queue);
@@ -103,7 +127,7 @@ out_vmem:
 	
 out_unregister:
 	unregister_blkdev(major_num, MODULE_NAME);
-	return -ENOMEM;
+	return ret;
 }
 
 static void kramdisk_exit(void) {
