@@ -44,12 +44,40 @@ static int kramdisk_getgeo(struct block_device *blk_dev, struct hd_geometry *geo
 	return 0;
 }
 
-static void _kramdisk_request(...) {
+static void _kramdisk_request(struct kramdisk_dev *dev, unsigned long sector,
+	unsigned long nsect, char *buf, int write) 
+{
+	unsigned long offset = sector*KERNEL_SECTOR_SIZE;
+	unsigned long nbytes = nsect*KERNEL_SECTOR_SIZE;
 	
+	if ((offset + nbytes) > dev->size) {
+		printk(KERN_ALERT "Too large buffer. dev->size=%lu offs=%lu nbytes=%lu\n", dev->size, offset, nbytes);
+		return;
+	}
+	
+	if (write) {
+		memcpy(dev->data, buf, nbytes);
+	} else {
+		memcpy(buf, dev->data + offset, nbytes);
+	}
 }
 
+#define blk_fs_request(rq) ((rq)->cmd_type == REQ_TYPE_FS)
+
 static void kramdisk_request(struct request_queue *queue) {
+	struct request *req;
 	
+	while ((req = blk_fetch_request(queue)) != NULL) {
+		struct kramdisk_dev *dev = req->rq_disk->private_data;
+		if (!blk_fs_request(req)) {
+			printk(KERN_NOTICE "Non-fs request\n");
+			__blk_end_request_cur(req, -EINVAL);
+			continue;
+		}
+		_kramdisk_request(dev, blk_rq_pos(req), blk_rq_cur_sectors(req),
+			req->buffer, rq_data_dir(req));
+		__blk_end_request_cur(req, 0);
+	}
 }
 
 static struct block_device_operations kramdisk_fops = {
