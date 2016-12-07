@@ -35,6 +35,7 @@ static int kramdisk_getgeo(struct block_device *blk_dev, struct hd_geometry *geo
 
 	/* We have no real geometry, of course, so make something up. */
 	// FIXME: not use global var
+	printk(KERN_NOTICE "%s called\n", __FUNCTION__);
 	size = dev->size;
 	geo->cylinders = (size & ~0x3f) >> 6;
 	geo->heads = 4;
@@ -62,22 +63,21 @@ static void _kramdisk_request(struct kramdisk_dev *dev, unsigned long sector,
 	}
 }
 
-#define blk_fs_request(rq) ((rq)->cmd_type == REQ_TYPE_FS)
-
 static void kramdisk_request(struct request_queue *queue) {
 	struct request *req;
 	
 	while ((req = blk_fetch_request(queue)) != NULL) {
 		struct kramdisk_dev *dev = req->rq_disk->private_data;
-		if (!blk_fs_request(req)) {
+		if (req->cmd_type != REQ_TYPE_FS) {
 			printk(KERN_NOTICE "Non-fs request\n");
-			__blk_end_request_cur(req, -EINVAL);
+			blk_end_request_cur(req, -EINVAL);
 			continue;
 		}
 		_kramdisk_request(dev, blk_rq_pos(req), blk_rq_cur_sectors(req),
 			req->buffer, rq_data_dir(req));
-		__blk_end_request_cur(req, 0);
+		blk_end_request_cur(req, 0);
 	}
+
 }
 
 static struct block_device_operations kramdisk_fops = {
@@ -118,8 +118,8 @@ static int kramdisk_init(void) {
 		ret = -ENOMEM;
 		goto out_devqueue;
 	}
-	blk_queue_physical_block_size(dev->queue, PAGE_SIZE);
-	blk_queue_logical_block_size(dev->queue, PAGE_SIZE);
+	blk_queue_physical_block_size(dev->queue, KERNEL_SECTOR_SIZE /*PAGE_SIZE*/);
+	blk_queue_logical_block_size(dev->queue, KERNEL_SECTOR_SIZE /*PAGE_SIZE*/);
 	// To support custom hardware sectorsize
 	// blk_queue_hardsect_size(dev->queue, SECTORSIZE);
 	
@@ -136,7 +136,7 @@ static int kramdisk_init(void) {
 	dev->gd->queue = dev->queue;
 	dev->gd->private_data = dev;
 	snprintf(dev->gd->disk_name, 32, "%s%c", MODULE_NAME, 0); // TODO #1
-	set_capacity(dev->gd, NSECTORS * KERNEL_SECTOR_SIZE /*(SECTORSIZE / KERNEL_SECTOR_SIZE)*/); // TODO #2
+	set_capacity(dev->gd, NSECTORS /*(SECTORSIZE / KERNEL_SECTOR_SIZE)*/); // TODO #2
 	
 	// This should be last call in init function
 	add_disk(dev->gd);
